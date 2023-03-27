@@ -1,0 +1,6 @@
+*__pycache__*
+.idea
+videos/*
+!videos/ffmpeg*
+venv
+quadcopter_hook_1DoF.egg-info

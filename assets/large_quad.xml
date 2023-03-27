@@ -1,0 +1,41 @@
+<mujoco model="Drone">
+  <compiler angle="radian" meshdir=""/>
+  <option timestep="0.005"/>
+  <visual>
+    <quality shadowsize="4096"/>
+  </visual>
+
+  <asset>
+    <mesh file="quad_model.stl" name="drone" smoothnormal="true" scale=".01 .01 .01"/>
+    <texture type="skybox" builtin="gradient" rgb1=".3 .5 .7" rgb2="0 0 0" width="512" height="512"/>
+    <texture name="grid" type="2d" builtin="checker" width="512" height="512" rgb1=".1 .2 .3" rgb2=".2 .3 .4"/>
+    <material name="grid" texture="grid" texrepeat="1 1" texuniform="true" reflectance=".2"/>
+  </asset>
+
+  <worldbody>
+    <camera pos="2.867 -5.173 1.776" xyaxes="0.875 0.485 0.000 -0.139 0.252 0.958"/>
+    <geom size="20 20 .05" type="plane" material="grid" condim="3"/>
+    <light dir=".2 1 -.4" diffuse=".9 .9 .9" specular="0.6 0.9 0.6" pos="-2 -10 6" cutoff="70"/>
+    <light dir="-.2 1 -.4" diffuse=".9 .9 .9" specular="0.6 0.9 0.6" pos="2 -10 6" cutoff="70"/>
+
+
+    <body name="drone" pos="0 0 0">
+        <inertial pos="0 0 0" diaginertia="1.5e-3 1.45e-3 2.66e-3" mass="0.605"/>
+        <joint type="free"/>
+        <geom name="drone" type="mesh" pos="0 0 0" euler="0 0 1.57" mesh="drone"/>
+        <site name="COG" pos="0 0 0"/>
+    </body>
+
+  </worldbody>
+
+  <actuator>
+      <general site="COG" gear=" 0 0 1 0 0 0" ctrllimited="true" ctrlrange="0 20"/>
+      <general site="COG" gear=" 0 0 0 1 0 0" ctrllimited="true" ctrlrange="-1 1"/>
+      <general site="COG" gear=" 0 0 0 0 1 0" ctrllimited="true" ctrlrange="-1 1"/>
+      <general site="COG" gear=" 0 0 0 0 0 1" ctrllimited="true" ctrlrange="-1 1"/>
+  </actuator>
+
+  <sensor>
+      <gyro site="COG"/>
+  </sensor>
+</mujoco>
