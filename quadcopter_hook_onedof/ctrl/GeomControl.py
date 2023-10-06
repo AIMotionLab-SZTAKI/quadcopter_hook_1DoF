@@ -18,8 +18,8 @@ class GeomControl:
             self.inertia = np.diag([1.4e-5, 1.4e-5, 2.1e-5])
             self.mass = 0.028
         elif drone_type == 'large_quad':
-            self.k_r = 4
-            self.k_v = 2
+            self.k_r = 6
+            self.k_v = 3
             self.k_R = 1.7
             self.k_w = 0.2
             self.inertia = np.diag([1.5e-3, 1.45e-3, 2.66e-3])

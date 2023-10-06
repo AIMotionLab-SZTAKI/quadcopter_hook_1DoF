@@ -21,6 +21,6 @@ $ pip install -e .
 To run the trajectory optimizations, a valid Mosek licence is needed.
 To test the installation run a script, e.g.
 ```
-$ cd flight/
-$ python3 fly.py
+$ cd quadcopter_hook_onedof/test/
+$ python3 test_transportation.py
 ```

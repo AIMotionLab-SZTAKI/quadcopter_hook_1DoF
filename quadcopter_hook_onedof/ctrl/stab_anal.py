@@ -1,8 +1,8 @@
 import mujoco
 import os
 import numpy as np
-from ctrl.GeomControl import GeomControl
-from ctrl.RobustGeomControl import RobustGeomControl
+from quadcopter_hook_onedof.ctrl.GeomControl import GeomControl
+from quadcopter_hook_onedof.ctrl.RobustGeomControl import RobustGeomControl
 
 
 if __name__ == '__main__':

@@ -1,17 +1,17 @@
 import numpy as np
-from ctrl.GeomControl import GeomControl
+from quadcopter_hook_onedof.ctrl.GeomControl import GeomControl
 
 
 class RobustGeomControl(GeomControl):
     def __init__(self, model, data, drone_type='cf2'):
         super().__init__(model, data, drone_type=drone_type)
-        self.delta_r = 1  # 0.01715
-        self.delta_R = 0
+        self.delta_r = 0*0.15  # 0.01715
+        self.delta_R = 0*0.015
         self.tau = 3
-        self.c1 = 1
-        self.c2 = 0.001
-        self.eps_r = 1e-4
-        self.eps_R = 1e-4
+        self.c1 = 0.1
+        self.c2 = 0.1
+        self.eps_r = 1e-2
+        self.eps_R = 1e-2
         self.Jinv = np.linalg.inv(self.inertia)
 
     def stability_analysis(self, k_r, k_v, k_R, k_w, c1, c2, J, m, eps=None):

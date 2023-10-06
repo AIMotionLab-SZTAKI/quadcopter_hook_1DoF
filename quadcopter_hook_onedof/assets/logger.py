@@ -296,7 +296,9 @@ class Logger:
         axs[row, col].set_ylabel('F (N)')
 
         row = 1
+        axs[row, col].plot(t, self.controls[:, 1, :].T)
         axs[row, col].plot(t, self.controls[:, 2, :].T)
+        axs[row, col].plot(t, self.controls[:, 3, :].T)
         axs[row, col].set_xlabel('time (s)')
         axs[row, col].set_ylabel(r'$\tau$ (Nm)')
 

@@ -28,8 +28,8 @@
             <geom type="cylinder" fromto="0 0 0  0 0 -0.4" size="0.005" mass="0.00"/>
             <site name="rod_end" pos="0 0 -0.4" type="sphere" size="0.002"/>
             <joint axis="0 1 0" pos="0 0 0" damping="0.0001"/>
-            <body name="hook0" pos="0 0 -0.4" euler="0 3.141592 -1.57">
-            <geom type="capsule" pos="0 0 0.02" size="0.005 0.02" mass="0.02"/>
+            <body name="hook0" pos="0 0 -0.4" euler="0 3.141592 0">
+            <geom type="capsule" pos="0 0 0.02" size="0.005 0.02" mass="0.001"/>
 
             <geom type="capsule" pos="0 0.01299 0.04750" euler="-1.04720 0 0" size="0.005 0.01800" mass="0.0001"/>
             <geom type="capsule" pos="0 0.02598 0.07000" euler="0.00000 0 0" size="0.005 0.01800" mass="0.0001"/>
@@ -53,10 +53,10 @@
     </body>
     </body>
 
-    <body name="load1" pos="1 0 0.1">
-        <geom type="box" size=".1 .1 .1" mass="0.1"/>
+    <body name="load1" pos="1 0 0.05">
+        <geom type="box" size=".075 .075 .05" mass="0.06"/>
         <joint type="free"/>
-        <body name="hook1" pos="0 0 .1">
+        <body name="hook1" pos="0 0 .05" euler="0 0 -1.57">
             <geom type="capsule" pos="0 0 0.02" size="0.005 0.02" mass="0.0001"/>
 
             <geom type="capsule" pos="0 0.01173 0.04565" euler="-1.12200 0 0" size="0.005 0.01562" mass="0.0001"/>

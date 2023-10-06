@@ -6,6 +6,7 @@ import os
 import pickle
 import timeit
 import sys, os
+import mujoco
 
 
 # Disable
@@ -38,11 +39,14 @@ class TrajectoryPlanner:
         self.log_optim = False
         self.z_max = 10
 
-    def eval_trajectory(self, t, der=0):
+    def eval_trajectory(self, t, der=0, yaw=0, init_pos_abs=np.zeros(3), grasp_offset=np.zeros(3)):
         t_span = t[-1] - t[0]
         knots = np.linspace(t[0] + t_span / 7, t[-1] - t_span / 7, 7)
         if der == 0:
-            y = si.splev(self.s_arr, self.spl)
+            y = np.array(si.splev(self.s_arr, self.spl))
+            R_yaw = np.array([[np.cos(yaw), -np.sin(yaw), 0],
+                              [np.sin(yaw), np.cos(yaw), 0], [0, 0, 1]])
+            y = ((R_yaw @ (y.T + grasp_offset).T).T + init_pos_abs).T
             # spl = [si.splrep(self.t_arr, y_, s=0, k=5) for y_ in y]
             spl = [si.splrep(self.t_arr, y_, k=5, task=-1, t=knots) for y_ in y]
             arr = np.array([si.splev(t, spl_) for spl_ in spl]).T
@@ -50,7 +54,10 @@ class TrajectoryPlanner:
             m = self.n
             idx = np.hstack([np.arange(i * (self.K + 1), (i + 1) * (self.K + 1) - 1) for i in range(m + 1)])
             idx = np.hstack((idx, (self.K + 1) * (m + 1) - 1))
-            y = [si.splev(self.s_arr, self.spl, der=1)[i] * np.sqrt(self.b[idx].flatten()) for i in range(3)]
+            y = np.array([si.splev(self.s_arr, self.spl, der=1)[i] * np.sqrt(self.b[idx].flatten()) for i in range(3)])
+            R_yaw = np.array([[np.cos(yaw), -np.sin(yaw), 0],
+                              [np.sin(yaw), np.cos(yaw), 0], [0, 0, 1]])
+            y = ((R_yaw @ (y.T + grasp_offset).T).T + init_pos_abs).T
             # spl = [si.splrep(self.t_arr, y_, s=0, k=5) for y_ in y]
             spl = [si.splrep(self.t_arr, y_, k=5, task=-1, t=knots) for y_ in y]
             arr = np.array([si.splev(t, spl_) for spl_ in spl]).T
@@ -562,9 +569,9 @@ def plot_3d_trajectory(x, y, z, vel, title, load_target):
     idx['D'] = (np.linalg.norm(points[:, 0, :] - (load_target + np.array([0, 0, 0.5])), axis=1)).argmin()
     idx['E'] = (np.linalg.norm(points[:, 0, :] - load_target, axis=1)).argmin()
     idx['F'] = len(x) - 1
-    for (k, v) in idx.items():
-        ax.scatter(x[v], y[v], z[v], marker='x', color='black')
-        ax.text(x[v], y[v], z[v]+0.2, k)
+    # for (k, v) in idx.items():
+    #     ax.scatter(x[v], y[v], z[v], marker='x', color='black')
+    #     ax.text(x[v], y[v], z[v]+0.2, k)
     traj_break_idx = np.argmax(np.abs(y) < 1e-4)
     # ax.scatter(x[traj_break_idx], y[traj_break_idx], z[traj_break_idx])
     # ax.scatter(0, 0, 0, marker='*')
@@ -843,21 +850,20 @@ def insert_wait_spl(spl, yaw_spl, wait_spl, wait_yaw_spl):
     return spl
 
 
-def construct(init_pos, load_target, load_mass, plot_result):
-    save_splines = False
+def construct(init_pos, load_target, load_mass, plot_result, save_splines=False, save_path=None,
+              init_pos_abs=np.array([0, 0, 0.67]), load_init_yaw=0, load_target_yaw=0, controllers=[6, 8, 5]):
     enable_plotting = plot_result
-    invert_traj = False
-    hook_yaw = 0
-    final_yaw = 0
-    final_pos = [p + o for p, o in zip(load_target, [-0.3 * np.cos(final_yaw), -0.3 * np.sin(final_yaw), 0])]
-    if init_pos[0] > 0:
-        hook_yaw = np.pi
-        invert_traj = True
-        init_pos[0] = -1 * init_pos[0]
-        init_pos[1] = -1 * init_pos[1]
-        load_target[0] = -1 * load_target[0]
-        load_target[1] = -1 * load_target[1]
-        final_pos = [p + o for p, o in zip(load_target, [0.3 * np.cos(final_yaw), 0.3 * np.sin(final_yaw), 0])]
+    # invert_traj = False
+    load_yaw_diff = load_target_yaw - load_init_yaw
+    final_pos = [p + o for p, o in zip(load_target, [-0.3 * np.cos(load_yaw_diff), -0.3 * np.sin(load_yaw_diff), 0])]
+    # if init_pos[0] > 0:
+    #     hook_yaw = np.pi
+    #     invert_traj = True
+    #     init_pos[0] = -1 * init_pos[0]
+    #     init_pos[1] = -1 * init_pos[1]
+    #     load_target[0] = -1 * load_target[0]
+    #     load_target[1] = -1 * load_target[1]
+    #     final_pos = [p + o for p, o in zip(load_target, [0.3 * np.cos(final_yaw), 0.3 * np.sin(final_yaw), 0])]
     # init_pos_list = [[-1.5, 2, 0.6], [-1, 0, 1.2], [0, 1.2, 0.6], [-0.3, 0.3, 1]]
     # load_target_list = [[1.5, 1.5, -0.01], [0.5, 2, -0.01], [1.8, 0, -0.01], [1, -1, -0.01]]
     # for init_pos, load_target in zip(init_pos_list, load_target_list):
@@ -870,9 +876,9 @@ def construct(init_pos, load_target, load_mass, plot_result):
     w = num_sec * [0.5]
     rho = num_sec * [0.1]
     bc = num_sec * [{}]
-    a_max = num_sec*[0.3]
+    a_max = num_sec*[0.15]
     v_max = num_sec*[1.46]
-    lam = num_sec*[0.0875]
+    lam = num_sec*[0.01]
     planner = num_sec * [TrajectoryPlanner(*([None]*9))]
     xyz = num_sec * [np.array(())]
     yaw = num_sec * [np.array(())]
@@ -882,8 +888,8 @@ def construct(init_pos, load_target, load_mass, plot_result):
     dzs = 0.12
     bc[0] = {'init_pos': init_pos[0:3], 'init_vel': [0, 0, 0], 'init_acc': [0, 0, 0],
              'final_pos': [xs, 0, [0, zs]], 'final_vel': [[None, 0.3], 0, [None, 0.2]],
-             'final_dir': [[0.2, None], 0, [-dzs, dzs]],
-             'final_curve': [None, 0, None], 'init_yaw': init_pos[3], 'final_yaw': hook_yaw}
+             'final_dir': [[0.2, None], 0, [-dzs, 0]],
+             'final_curve': [None, 0, None], 'init_yaw': init_pos[3], 'final_yaw': load_init_yaw}
     params = [bc, n, k, rho, w, K, a_max, v_max, lam]
     params = [list(x) for x in zip(*params)]
     planner[0] = TrajectoryPlanner(*params[0])
@@ -901,7 +907,7 @@ def construct(init_pos, load_target, load_mass, plot_result):
     bc[1] = {'init_pos': [xyz[0][-1, 0], 0, xyz[0][-1, 2]], 'final_vel': 3 * [[None, 0.2]],
              'init_vel': planner[0].vel_traj[-1] * final_der / np.linalg.norm(final_der),
              'final_pos': [0, 0, 0], 'final_dir': [[0, None], 0, 0], 'final_curve': [None, None, 0],
-             'init_dir': final_der, 'init_yaw': hook_yaw, 'final_yaw': hook_yaw}
+             'init_dir': final_der, 'init_yaw': load_init_yaw, 'final_yaw': load_init_yaw}
     params = [bc, n, k, rho, w, K, a_max, v_max, lam]
     params = [list(x) for x in zip(*params)]
     planner[1] = TrajectoryPlanner(*params[1])
@@ -918,11 +924,12 @@ def construct(init_pos, load_target, load_mass, plot_result):
     final_der[1] = 0
     bc[2] = {'init_pos': [xyz[1][-1, 0], 0, xyz[1][-1, 2]],
              'init_vel': planner[1].vel_traj[-1] * final_der / np.linalg.norm(final_der), 'final_vel': 3 * [0.0],
-             'final_pos': load_target + np.array([0.0, 0.0, 0.45]), 'init_curve': [None, None, [0.2, None]], 'final_dir': [0.0, 0.0, [None, -0.2]],#'final_curve': [0.0, 0.0, 0.0],
-             'init_dir': [[0.5, None], 0, 0], 'init_yaw': hook_yaw, 'final_yaw': 0}
+             'final_pos': load_target + np.array([0.0, 0.0, 0.35]), 'init_curve': [None, None, [0.3, None]], 'final_dir': [0.0, 0.0, [None, -0.2]],#'final_curve': [0.0, 0.0, 0.0],
+             'init_dir': [[0.5, None], 0, 0], 'init_yaw': load_init_yaw, 'final_yaw': load_target_yaw}
     params = [bc, n, k, rho, w, K, a_max, v_max, lam]
     params = [list(x) for x in zip(*params)]
     planner[2] = TrajectoryPlanner(*params[2])
+    planner[2].a_max = 0.1
     planner[2].construct_trajectory()
     xyz[2] = np.array(si.splev(planner[2].s_arr, planner[2].spl)).T
     yaw[2] = compute_yaw_setpoints(bc[2]['init_yaw'], bc[2]['final_yaw'], planner[2].t_arr[-1])
@@ -930,7 +937,7 @@ def construct(init_pos, load_target, load_mass, plot_result):
     bc[3] = {'init_pos': [xyz[2][-1, 0], xyz[2][-1, 1], xyz[2][-1, 2]],
              'init_vel': 3 * [0], 'final_vel': 3 * [0],
              'final_pos': load_target, 'init_dir': [0.0, 0.0, -0.01],
-             'init_yaw': 0}
+             'init_yaw': load_target_yaw, 'final_yaw': load_target_yaw}
     w[3] = 1e-5
     params = [bc, n, k, rho, w, K, a_max, v_max, lam]
     params = [list(x) for x in zip(*params)]
@@ -938,28 +945,36 @@ def construct(init_pos, load_target, load_mass, plot_result):
     planner[3].v_max = 0.3
     planner[3].construct_trajectory()
     xyz[3] = np.array(si.splev(planner[3].s_arr, planner[3].spl)).T
-    yaw[3] = compute_yaw_setpoints(bc[3]['init_yaw'], 0, planner[3].t_arr[-1])
+    yaw[3] = compute_yaw_setpoints(bc[3]['init_yaw'], bc[3]['final_yaw'], planner[3].t_arr[-1])
 
     bc[4] = {'init_pos': [xyz[3][-1, 0], xyz[3][-1, 1], xyz[3][-1, 2]],
              'init_vel': 3 * [0], 'final_vel': 3 * [0],
-             'final_pos': final_pos, 'init_curve': [None, None, 0],
-             'init_dir': [2 * np.cos(yaw[2][-1]), 2 * np.sin(yaw[2][-1]), 0], 'init_yaw': yaw[2][-1]}
+             'final_pos': final_pos, #'init_curve': [None, None, 0],
+             # 'init_dir': [2 * np.cos(yaw[2][-1]), 2 * np.sin(yaw[2][-1]), -20], 'init_yaw': load_target_yaw}
+             'init_dir': [1, 1, -15], 'init_yaw': load_target_yaw}
     params = [bc, n, k, rho, w, K, a_max, v_max, lam]
     params = [list(x) for x in zip(*params)]
     planner[4] = TrajectoryPlanner(*params[4])
     planner[4].v_max = 0.2
+    planner[4].a_max = 0.2
     planner[4].construct_trajectory()
     xyz[4] = np.array(si.splev(planner[4].s_arr, planner[4].spl)).T
     yaw[4] = compute_yaw_setpoints(bc[4]['init_yaw'], bc[4]['init_yaw'], planner[4].t_arr[-1])
 
+    R_yaw = np.array([[np.cos(load_init_yaw), -np.sin(load_init_yaw), 0],
+                      [np.sin(load_init_yaw), np.cos(load_init_yaw), 0], [0, 0, 1]])
     xyz = np.vstack([xyz_ for xyz_ in xyz])
+    xyz = (R_yaw @ xyz.T).T + init_pos_abs
     vel_traj = np.hstack([planner_.vel_traj for planner_ in planner])
     T = [planner_.t_arr[-1] for planner_ in planner]
 
     num_lqr_steps = 300
 
     t = [np.arange(0, T_, 0.01) for T_ in T]
-    pos, spl = list(zip(*[planner_.eval_trajectory(t_, 0) for planner_, t_ in zip(planner, t)]))
+    pos, spl = list(zip(*[planner_.eval_trajectory(t_, der=0, yaw=load_init_yaw,
+                                                   init_pos_abs=init_pos_abs,
+                                                   grasp_offset=np.array([0, 0, 0]))
+                          for planner_, t_ in zip(planner, t)]))
     pos = list(pos)
     yaw_spl = [compute_yaw_spline(t_, yaw_) for t_, yaw_ in zip(t, yaw)]
     t_wait = num_lqr_steps * 0.01
@@ -967,7 +982,7 @@ def construct(init_pos, load_target, load_mass, plot_result):
     wait_spl = [si.splrep(np.linspace(0, t_wait, 20), pos[2][-1, i]*np.ones(20), k=5, task=-1, t=knots) for i in range(3)]
     wait_yaw_spl = si.splrep(np.linspace(0, t_wait, 20), yaw[2][-1]*np.ones(20), k=5, task=-1, t=knots)
     spl = insert_wait_spl(spl, yaw_spl, wait_spl, wait_yaw_spl)
-    vel = [planner_.eval_trajectory(t_, 1)[0] for planner_, t_ in zip(planner, t)]
+    vel = [planner_.eval_trajectory(t_, 1, yaw=load_init_yaw)[0] for planner_, t_ in zip(planner, t)]
     acc = [planner_.eval_trajectory(t_, 2)[0] for planner_, t_ in zip(planner, t)]
     ctrl_type = sum([len(pos[i]) for i in range(2)]) * ['geom'] + len(pos[2]) * ['geom_load' + "{:.3f}".format(load_mass)] + \
                 num_lqr_steps * ['lqr' + "{:.3f}".format(load_mass)] + len(pos[3]) * ['geom_load' + "{:.3f}".format(load_mass)] + len(pos[4]) * ['geom']
@@ -980,9 +995,12 @@ def construct(init_pos, load_target, load_mass, plot_result):
     yaw = np.hstack(yaw)
 
     if save_splines:
-        from datetime import datetime
-        now = datetime.now()
-        save(spl, '../pickle/hook_up_spline_' + now.strftime("%H_%M_%S") + '.pickle')
+        switch_1 = [sum(T[0:3]), controllers[0]]
+        switch_2 = [sum(T[0:3]) + 0.01*num_lqr_steps, controllers[1]]
+        switch_3 = [sum(T[0:3]) + 0.01*num_lqr_steps + T[3], controllers[2]]
+        switch = [switch_1, switch_2, switch_3]
+        print(f'Switch duration: {T[3]} s')
+        save([spl, switch], save_path)
 
     if enable_plotting:
         tle = 'Duration of trajectory: ' + "{:.2f}".format(sum(T)) + ' seconds'
@@ -994,6 +1012,7 @@ def construct(init_pos, load_target, load_mass, plot_result):
         # plt.plot(t[0:plot_len], pos[0:plot_len, 0])
         # plt.plot(t[0:plot_len], pos[0:plot_len, 1])
         # plt.plot(t[0:plot_len], pos[0:plot_len, 2])
+        '''
         acc = np.clip(acc, -0.4, 0.4)
         plt.plot(t[0:plot_len], acc[0:plot_len, 0])
         plt.plot(t[0:plot_len], acc[0:plot_len, 1])
@@ -1007,7 +1026,9 @@ def construct(init_pos, load_target, load_mass, plot_result):
                             top=0.98,
                             wspace=0.5,
                             hspace=0.5
-                            )
+                            )'''
+        plt.plot(t[0:plot_len], yaw[0:plot_len])
+        plt.show(block=True)
         # plt.ylim((-0.45, 0.45))
         # fig = plt.figure()
         # plt.plot(t[0:plot_len], vel[0:plot_len, 0])
@@ -1033,11 +1054,11 @@ def construct(init_pos, load_target, load_mass, plot_result):
         # plt.plot(t, acc)
         # plt.plot(t, np.linalg.norm(pos, axis=1))
         # plt.show()
-    if invert_traj:
-        pos[:, 0] = -1*pos[:, 0]
-        pos[:, 1] = -1*pos[:, 1]
-        vel[:, 0] = -1*vel[:, 0]
-        vel[:, 1] = -1*vel[:, 1]
+    # if invert_traj:
+    #     pos[:, 0] = -1*pos[:, 0]
+    #     pos[:, 1] = -1*pos[:, 1]
+    #     vel[:, 0] = -1*vel[:, 0]
+    #     vel[:, 1] = -1*vel[:, 1]
     T[3] = T[3] + num_lqr_steps * 0.01
     return pos, vel, yaw, ctrl_type, T
 
@@ -1047,19 +1068,3 @@ def save(data, filename='pickle/optimal_trajectory.pickle'):
         os.remove(filename)
     with open(filename, 'wb') as file:
         pickle.dump(data, file)
-
-
-if __name__ == '__main__':
-    import mujoco
-    # import glfw
-    from ctrl.GeomControl import GeomControl
-    from scipy.spatial.transform import Rotation
-    # from assets.util import sync
-    # import time
-    # optimize_parameters()
-    eval_optimal_parameters()
-    # init_pos = [-1.5, 2, 1.8, 0]
-    # load_target = [-1.5, 1, 0.78]
-    # pos, vel, yaw, ctrl_type = construct(init_pos, load_target, plot_result=True)
-    # save([pos, vel, yaw, ctrl_type])
-    # construct([2.5, 0.4, 0, 0], [2.4, 0.4, 0], True)
